@@ -1,0 +1,39 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0"
+    />
+    <meta http-equiv="X-UA-Compatible" content="ie=edge" />
+    <title>{% block title %} {% endblock %}ШифрГрам</title>
+    <link rel="stylesheet" href="{% static 'core/css/base.css' %}">
+    {% block extra_css %}{% endblock %}
+  </head>
+
+  <body>
+    <nav class="navbar">
+      <div class="nav-container">
+        <div class="nav-brand">
+          <a href="/" class="brand-link">ШифрГрам</a>
+        </div>
+        <div class="nav-menu">
+          {% if request.user.is_authenticated %}
+          <a href="/rooms/" class="nav-link">Комнаты</a>
+          <form action="/logout/" method="post" class="nav-form">
+            {% csrf_token %}
+            <button type="submit" class="nav-button logout-btn">Выход</button>
+          </form>
+          {% else %}
+          <a href="/login/" class="nav-link">Авторизация</a>
+          <a href="/signup/" class="nav-button signup-btn">Регистрация</a>
+          {% endif %}
+        </div>
+      </div>
+    </nav>
+
+    {% block content %} {% endblock %} {% block scripts %} {% endblock %}
+  </body>
+</html>

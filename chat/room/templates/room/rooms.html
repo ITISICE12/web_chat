@@ -1,0 +1,37 @@
+{% extends 'core/base.html' %}
+
+{% block title %}Комнаты общения | {% endblock %}
+
+{% block content %}
+<div class="rooms-header">
+    <h1 class="rooms-title">Комнаты общения</h1>
+    <p class="rooms-subtitle">Выберите комнату для начала общения</p>
+</div>
+
+<div class="rooms-container">
+    {% for room in rooms %}
+    <div class="room-card">
+        <div class="room-icon">💬</div>
+        <h2 class="room-name">{{ room.name }}</h2>
+        <p class="room-description">Общайтесь с участниками комнаты</p>
+        <a href="{% url 'room' room.slug %}" class="room-join-button">
+            Присоединиться
+            <span class="button-arrow">→</span>
+        </a>
+    </div>
+    {% empty %}
+    <div class="no-rooms">
+        <div class="no-rooms-icon">🏢</div>
+        <h3 class="no-rooms-title">Комнаты не найдены</h3>
+        <p class="no-rooms-text">Пока нет созданных комнат для общения</p>
+    </div>
+    {% endfor %}
+</div>
+
+<div class="rooms-actions">
+    <a href="/" class="back-button">
+        <span class="button-arrow">←</span>
+        На главную
+    </a>
+</div>
+{% endblock %}

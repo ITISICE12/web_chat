@@ -1,0 +1,481 @@
+{% extends 'core/base.html' %} {% load static %} {% block title %}
+{{ room.name}} | {% endblock %} {% block extra_css %}
+<link rel="stylesheet" href="{% static 'core/css/chat.css' %}" />
+{% endblock %} {% block content %}
+<div class="header">
+  <h1>{{ room.name }}</h1>
+</div>
+
+<!-- Кнопка очистки истории -->
+<div class="history-controls">
+  <button id="clear-history" title="Очистить историю сообщений">
+    🗑️ Очистить историю
+  </button>
+</div>
+
+<div class="chat-layout">
+  <!-- Блок пользователей онлайн -->
+  <div class="online-users-sidebar">
+    <div class="online-users-header">
+      <h3>👥 Участники</h3>
+      <span class="online-count" id="online-count">0 онлайн</span>
+    </div>
+    <div class="online-users-list" id="online-users-list">
+      <!-- Список пользователей будет заполняться через WebSocket -->
+      <div class="no-users">Нет участников онлайн</div>
+    </div>
+  </div>
+
+  <!-- Основной блок чата -->
+  <div class="chat-main">
+    <div class="chat-container">
+      <div class="chat-messages" id="chat-messages">
+        <!-- Сообщения из Django будут загружены через JavaScript -->
+      </div>
+    </div>
+
+    <div class="message-form-container">
+      <form method="post" action="." class="message-form" id="message-form">
+        {% csrf_token %}
+        <input
+          type="text"
+          name="content"
+          placeholder="Введите сообщение"
+          id="chat-message-input"
+        />
+        <button type="button" id="chat-message-submit">Отправить</button>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %} {% block scripts %} {{ room.slug|json_script:"json-roomname" }}
+{{ request.user.username|json_script:"json-username" }}
+<!-- Передаем сообщения из Django в JavaScript -->
+<script id="django-messages" type="application/json">
+  {{ messages_json|safe }}
+</script>
+<script>
+  // Объявляем переменные в глобальной области
+  let chatSocket = null;
+  let roomName, userName;
+  let messageHistory = new Set();
+  let onlineUsers = new Set();
+
+  // Ждем загрузки DOM
+  document.addEventListener("DOMContentLoaded", function () {
+    // Небольшая задержка для полной загрузки страницы
+    setTimeout(initializeChat, 100);
+  });
+
+  function initializeChat() {
+    try {
+      // Получаем данные из Django
+      const roomNameElement = document.getElementById("json-roomname");
+      const userNameElement = document.getElementById("json-username");
+      
+      if (!roomNameElement || !userNameElement) {
+        console.error("❌ Не найдены необходимые элементы DOM");
+        showNotification("Ошибка загрузки чата. Перезагрузите страницу.", "error");
+        return;
+      }
+
+      roomName = JSON.parse(roomNameElement.textContent);
+      userName = JSON.parse(userNameElement.textContent);
+
+      if (!roomName || !userName) {
+        console.error("❌ Не удалось получить roomName или userName");
+        showNotification("Ошибка: неверные данные пользователя или комнаты", "error");
+        return;
+      }
+
+      console.log("🔄 Инициализация чата для комнаты:", roomName);
+      console.log("👤 Текущий пользователь:", userName);
+
+      // Инициализируем интерфейс
+      onlineUsers.add(userName);
+      updateOnlineUsersDisplay();
+
+      // Сначала загружаем сообщения из Django, потом создаем WebSocket
+      loadInitialMessages();
+      
+      // Создаем WebSocket соединение с небольшой задержкой
+      setTimeout(createWebSocket, 500);
+      
+      setupUIHandlers();
+
+    } catch (error) {
+      console.error("❌ Ошибка инициализации чата:", error);
+      showNotification("Ошибка инициализации чата. Перезагрузите страницу.", "error");
+    }
+  }
+
+  // ФУНКЦИЯ ЗАГРУЗКИ ИСХОДНЫХ СООБЩЕНИЙ ИЗ DJANGO
+  function loadInitialMessages() {
+    try {
+      const djangoMessagesElement = document.getElementById("django-messages");
+      const chatMessages = document.querySelector("#chat-messages");
+      
+      if (!chatMessages) {
+        console.error("❌ Элемент chat-messages не найден");
+        return;
+      }
+
+      // Очищаем контейнер сообщений
+      chatMessages.innerHTML = "";
+
+      if (djangoMessagesElement && djangoMessagesElement.textContent) {
+        const djangoMessages = JSON.parse(djangoMessagesElement.textContent);
+        console.log("📚 Загружены сообщения из Django:", djangoMessages.length);
+
+        // Отображаем сообщения из Django
+        djangoMessages.forEach((djangoMsg) => {
+          const messageKey = `${djangoMsg.user?.username || 'unknown'}_${djangoMsg.content}_${djangoMsg.timestamp || new Date().toISOString()}`;
+          if (!messageHistory.has(messageKey)) {
+            displayMessage(
+              djangoMsg.user?.username || 'Неизвестный',
+              djangoMsg.content,
+              djangoMsg.timestamp
+            );
+            messageHistory.add(messageKey);
+          }
+        });
+
+        console.log("✅ Сообщения из Django отображены");
+      } else {
+        console.log("ℹ️ Нет сообщений из Django для отображения");
+        chatMessages.innerHTML = '<div class="no-messages">Нет сообщений</div>';
+      }
+    } catch (error) {
+      console.error("❌ Ошибка загрузки сообщений из Django:", error);
+    }
+  }
+
+  function createWebSocket() {
+    try {
+      if (chatSocket) {
+        chatSocket.close();
+      }
+
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsUrl = protocol + "//" + window.location.host + "/ws/" + roomName + "/";
+      console.log("🔗 Подключение к:", wsUrl);
+
+      chatSocket = new WebSocket(wsUrl);
+      setupWebSocketHandlers();
+    } catch (error) {
+      console.error("❌ Ошибка создания WebSocket:", error);
+      showNotification("Ошибка подключения к чату. Попытка переподключения...", "warning");
+      setTimeout(createWebSocket, 3000);
+    }
+  }
+
+  function setupWebSocketHandlers() {
+    if (!chatSocket) {
+      console.error("❌ WebSocket не создан");
+      return;
+    }
+
+    chatSocket.onopen = function (e) {
+      console.log("✅ WebSocket соединение установлено");
+      showNotification("Подключение к чату установлено", "success");
+    };
+
+    chatSocket.onerror = function (error) {
+      console.log("❌ WebSocket ошибка:", error);
+      showNotification("Ошибка соединения с чатом", "error");
+    };
+
+    chatSocket.onmessage = function (e) {
+      console.log("📨 Получено сообщение:", e.data);
+      try {
+        const data = JSON.parse(e.data);
+
+        if (data.type === "history") {
+          handleHistoryMessage(data.messages);
+        } else if (data.type === "new_message") {
+          handleChatMessage(data);
+        } else if (data.type === "user_activity") {
+          handleUserActivity(data);
+        } else if (data.type === "online_users") {
+          handleOnlineUsers(data);
+        } else if (data.type === "error") {
+          console.error("❌ Ошибка от сервера:", data.message);
+          showNotification(data.message, "error");
+        } else {
+          console.log("❓ Неизвестный тип сообщения:", data);
+        }
+      } catch (error) {
+        console.error("❌ Ошибка парсинга JSON:", error);
+      }
+    };
+
+    chatSocket.onclose = function (e) {
+      console.log("🔌 Соединение закрыто, код:", e.code, "причина:", e.reason);
+      showNotification("Соединение разорвано. Переподключение...", "warning");
+      setTimeout(createWebSocket, 3000);
+    };
+  }
+
+  // ОБРАБОТКА ИСТОРИИ СООБЩЕНИЙ
+  function handleHistoryMessage(messages) {
+    console.log("📚 Получена история сообщений:", messages.length);
+    
+    messages.forEach((messageData) => {
+      const messageKey = `${messageData.username}_${messageData.message}_${messageData.date_added}`;
+      if (!messageHistory.has(messageKey)) {
+        displayMessage(
+          messageData.username,
+          messageData.message,
+          messageData.date_added
+        );
+        messageHistory.add(messageKey);
+      }
+    });
+  }
+
+  // ОБРАБОТКА ЧАТ-СООБЩЕНИЙ
+  function handleChatMessage(data) {
+    console.log("💬 Новое сообщение от:", data.username);
+    
+    // Создаем уникальный ключ для сообщения
+    const messageKey = `${data.username}_${data.message}_${data.timestamp}`;
+    
+    // Проверяем, не отображали ли мы уже это сообщение
+    if (!messageHistory.has(messageKey)) {
+      displayMessage(data.username, data.message, data.timestamp);
+      messageHistory.add(messageKey);
+    }
+  }
+
+  // Остальные функции без изменений...
+  function handleUserActivity(data) {
+    if (data.activity === 'joined') {
+      handleUserJoin(data.username);
+    } else if (data.activity === 'left') {
+      handleUserLeave(data.username);
+    }
+    
+    showChatNotification(data.message, data.activity);
+  }
+
+  function handleOnlineUsers(data) {
+    console.log("👥 Получен список пользователей:", data.users);
+    onlineUsers = new Set(data.users);
+    updateOnlineUsersDisplay();
+  }
+
+  function handleUserJoin(username) {
+    console.log("👤 Пользователь присоединился:", username);
+    onlineUsers.add(username);
+    updateOnlineUsersDisplay();
+  }
+
+  function handleUserLeave(username) {
+    console.log("👤 Пользователь покинул чат:", username);
+    onlineUsers.delete(username);
+    updateOnlineUsersDisplay();
+  }
+
+  function updateOnlineUsersDisplay() {
+    const usersList = document.getElementById("online-users-list");
+    const onlineCount = document.getElementById("online-count");
+
+    if (!usersList) return;
+
+    if (onlineCount) {
+      onlineCount.textContent = `${onlineUsers.size} онлайн`;
+    }
+
+    usersList.innerHTML = "";
+
+    if (onlineUsers.size === 0) {
+      usersList.innerHTML = '<div class="no-users">Нет участников онлайн</div>';
+      return;
+    }
+
+    const sortedUsers = Array.from(onlineUsers).sort((a, b) => {
+      if (a === userName) return -1;
+      if (b === userName) return 1;
+      return a.localeCompare(b);
+    });
+
+    sortedUsers.forEach((user) => {
+      const userItem = document.createElement("div");
+      userItem.className = `user-item ${user === userName ? "current-user" : ""}`;
+      const avatarText = user.substring(0, 2).toUpperCase();
+
+      userItem.innerHTML = `
+        <div class="user-avatar">${avatarText}</div>
+        <div class="user-info">
+          <div class="user-name">${user}</div>
+          <div class="user-status">online</div>
+        </div>
+      `;
+
+      usersList.appendChild(userItem);
+    });
+  }
+
+  function showChatNotification(message, type) {
+    const chatMessages = document.querySelector("#chat-messages");
+    if (!chatMessages) return;
+
+    const notificationClass = type === "joined" ? "user-join-notification" : "user-leave-notification";
+    const notificationHTML = `<div class="${notificationClass}">${message}</div>`;
+
+    chatMessages.innerHTML += notificationHTML;
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+  }
+
+  function displayMessage(username, message, timestamp = null) {
+    const chatMessages = document.querySelector("#chat-messages");
+    if (!chatMessages) return;
+
+    const isCurrentUser = username === userName;
+    const messageClass = isCurrentUser ? "message-current-user" : "message-other-user";
+    const displayTime = timestamp ? new Date(timestamp).toLocaleTimeString() : new Date().toLocaleTimeString();
+
+    const messageHTML = `
+      <div class="message ${messageClass}">
+        <p class="message-username">${username}</p>
+        <p class="message-content">${message}</p>
+        <p class="message-time">${displayTime}</p>
+      </div>
+    `;
+
+    chatMessages.innerHTML += messageHTML;
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+  }
+
+  function setupUIHandlers() {
+    const submitButton = document.querySelector("#chat-message-submit");
+    const messageInput = document.querySelector("#chat-message-input");
+    const clearHistoryButton = document.querySelector("#clear-history");
+    const messageForm = document.querySelector("#message-form");
+
+    if (!submitButton || !messageInput) {
+      console.error("❌ Элементы интерфейса не найдены");
+      return;
+    }
+
+    submitButton.addEventListener("click", function (e) {
+      e.preventDefault();
+      sendMessage();
+    });
+
+    if (messageForm) {
+      messageForm.addEventListener("submit", function (e) {
+        e.preventDefault();
+        sendMessage();
+      });
+    }
+
+    messageInput.addEventListener("keypress", function (e) {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        sendMessage();
+      }
+    });
+
+    if (clearHistoryButton) {
+      clearHistoryButton.addEventListener("click", function (e) {
+        e.preventDefault();
+        clearMessageHistory();
+      });
+    }
+  }
+
+  function sendMessage() {
+    if (!chatSocket) {
+      console.error("❌ WebSocket не инициализирован");
+      showNotification("Соединение не установлено. Попробуйте перезагрузить страницу.", "error");
+      return;
+    }
+
+    if (chatSocket.readyState !== WebSocket.OPEN) {
+      console.error("❌ WebSocket не готов к отправке. Состояние:", chatSocket.readyState);
+      showNotification("Соединение разорвано. Попытка переподключения...", "warning");
+      setTimeout(createWebSocket, 1000);
+      return;
+    }
+
+    const messageInput = document.querySelector("#chat-message-input");
+    const message = messageInput.value.trim();
+
+    if (!message) {
+      console.warn("⚠️ Попытка отправить пустое сообщение");
+      return;
+    }
+
+    if (!userName) {
+      console.error("❌ Имя пользователя не определено");
+      showNotification("Ошибка: имя пользователя не определено", "error");
+      return;
+    }
+
+    try {
+      const messageData = {
+        message: message,
+        username: userName,
+        room: roomName
+      };
+
+      console.log("📤 Отправка сообщения:", messageData);
+      chatSocket.send(JSON.stringify(messageData));
+
+      messageInput.value = "";
+      console.log("✅ Сообщение отправлено успешно");
+
+    } catch (error) {
+      console.error("❌ Ошибка отправки сообщения:", error);
+      showNotification("Ошибка отправки сообщения", "error");
+    }
+  }
+
+  function clearMessageHistory() {
+    if (confirm("Вы уверены, что хотите очистить историю сообщений?\nЭто действие нельзя отменить.")) {
+      const chatMessages = document.querySelector("#chat-messages");
+      if (chatMessages) {
+        chatMessages.innerHTML = '<div class="history-cleared">История сообщений очищена</div>';
+        messageHistory.clear();
+      }
+
+      showNotification("История сообщений очищена", "success");
+      console.log("🗑️ Локальная история сообщений очищена");
+    }
+  }
+
+  function showNotification(message, type = "info") {
+    const notification = document.createElement("div");
+    notification.className = `notification notification-${type}`;
+    notification.innerHTML = `
+      <div class="notification-content">
+        <span class="notification-icon">${type === "success" ? "✅" : type === "error" ? "❌" : type === "warning" ? "⚠️" : "ℹ️"}</span>
+        <span>${message}</span>
+      </div>
+    `;
+
+    document.body.appendChild(notification);
+
+    setTimeout(() => {
+      if (notification.parentNode) {
+        notification.parentNode.removeChild(notification);
+      }
+    }, 5000);
+  }
+
+  // Автофокус на поле ввода
+  window.addEventListener("load", function () {
+    const messageInput = document.querySelector("#chat-message-input");
+    if (messageInput) {
+      messageInput.focus();
+    }
+  });
+
+  window.addEventListener("beforeunload", function () {
+    if (chatSocket) {
+      chatSocket.close(1000, "Пользователь покинул страницу");
+    }
+  });
+</script>
+{% endblock %}

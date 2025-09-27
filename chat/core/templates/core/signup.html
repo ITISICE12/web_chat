@@ -1,0 +1,82 @@
+{% extends 'core/base.html' %} 
+
+{% block title %}Регистрация | {% endblock %} 
+
+{% block content %}
+<div class="auth-container">
+  <div class="auth-header">
+    <h1 class="auth-title">Создать аккаунт</h1>
+    <p class="auth-subtitle">
+      Присоединяйтесь к ШифрГрам для безопасного общения
+    </p>
+  </div>
+
+  <form method="post" action="." class="auth-form">
+    {% csrf_token %}
+
+    <div class="form-group">
+      <label class="form-label">Имя пользователя</label>
+      <input
+        type="text"
+        name="username"
+        class="form-input"
+        placeholder="Придумайте уникальное имя пользователя"
+        required
+      />
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Пароль</label>
+      <input
+        type="password"
+        name="password1"
+        class="form-input"
+        placeholder="Создайте надежный пароль"
+        required
+      />
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Повторить пароль</label>
+      <input
+        type="password"
+        name="password2"
+        class="form-input"
+        placeholder="Повторите пароль для подтверждения"
+        required
+      />
+    </div>
+
+    {% if form.errors %}
+    <div class="error-messages">
+      {% for field in form %}
+        {% for error in field.errors %}
+        <div class="error-message">
+          <span class="error-icon">⚠️</span>
+          <span>{{ error|escape }}</span>
+        </div>
+        {% endfor %}
+      {% endfor %}
+      
+      {% if form.non_field_errors %}
+        {% for error in form.non_field_errors %}
+        <div class="error-message">
+          <span class="error-icon">⚠️</span>
+          <span>{{ error|escape }}</span>
+        </div>
+        {% endfor %}
+      {% endif %}
+    </div>
+    {% endif %}
+
+    <button type="submit" class="auth-button">Создать аккаунт</button>
+
+    <div class="auth-links">
+      <p>
+        Уже есть аккаунт?
+        <a href="/login/" class="auth-link">Войдите в систему</a>
+      </p>
+    </div>
+  </form>
+</div>
+{% endblock %}

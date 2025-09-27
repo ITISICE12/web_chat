@@ -1,0 +1,46 @@
+{% extends 'core/base.html' %}
+
+{% block title %}Добро пожаловать | {% endblock %}
+
+{% block content %}
+<div class="hero-section">
+    <div class="hero-content">
+        <h1 class="hero-title">ШифрГрам</h1>
+        <p class="hero-subtitle">Безопасный мессенджер с шифрованием</p>
+        
+        {% if not request.user.is_authenticated %}
+        <div class="hero-buttons">
+            <a href="/signup/" class="hero-button primary">Начать общение</a>
+            <a href="/login/" class="hero-button secondary">Войти в аккаунт</a>
+        </div>
+        {% else %}
+        <div class="hero-buttons">
+            <a href="/rooms/" class="hero-button primary">Перейти к комнатам</a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<div class="features-section">
+    <div class="features-container">
+        <h2 class="features-title">Почему ШифрГрам?</h2>
+        <div class="features-grid">
+            <div class="feature-card">
+                <div class="feature-icon">🔒</div>
+                <h3 class="feature-title">Безопасность</h3>
+                <p class="feature-description">Все сообщения защищены современным шифрованием</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">⚡</div>
+                <h3 class="feature-title">Скорость</h3>
+                <p class="feature-description">Мгновенная доставка сообщений в реальном времени</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">👥</div>
+                <h3 class="feature-title">Группы</h3>
+                <p class="feature-description">Создавайте комнаты для общения с друзьями и коллегами</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

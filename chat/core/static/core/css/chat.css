@@ -1,0 +1,243 @@
+/* ДЛЯ СИСТЕМЫ ОТСЛЕЖИВАНИЯ ПОЛЬЗОВАТЕЛЕЙ - ИСПРАВЛЕННАЯ ВЕРСИЯ */
+
+.chat-layout {
+  display: flex;
+  gap: 20px;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 20px;
+}
+
+.online-users-sidebar {
+  width: 280px;
+  background: var(--bg-secondary);
+  border-radius: 10px;
+  padding: 15px;
+  height: fit-content;
+  max-height: 600px;
+  box-shadow: var(--shadow);
+  border: 1px solid var(--border-color);
+}
+
+.online-users-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+  padding-bottom: 10px;
+  border-bottom: 2px solid var(--border-color);
+}
+
+.online-users-header h3 {
+  margin: 0;
+  font-size: 18px;
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.online-count {
+  font-size: 12px;
+  color: var(--text-primary);
+  background: var(--success-color);
+  padding: 4px 10px;
+  border-radius: 15px;
+  font-weight: 500;
+}
+
+.online-users-list {
+  max-height: 500px;
+  overflow-y: auto;
+  padding-right: 5px;
+}
+
+/* Исправленные скроллбары для темной темы */
+.online-users-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.online-users-list::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 3px;
+}
+
+.online-users-list::-webkit-scrollbar-thumb {
+  background: var(--accent-primary);
+  border-radius: 3px;
+}
+
+.online-users-list::-webkit-scrollbar-thumb:hover {
+  background: var(--accent-secondary);
+}
+
+.user-item {
+  display: flex;
+  align-items: center;
+  padding: 12px;
+  margin: 8px 0;
+  background: var(--bg-tertiary);
+  border-radius: 8px;
+  border-left: 4px solid var(--success-color);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  transition: all 0.3s ease;
+  color: var(--text-primary);
+}
+
+.user-item:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.4);
+}
+
+.user-item.current-user {
+  border-left-color: var(--accent-primary);
+  background: linear-gradient(135deg, rgba(108, 99, 255, 0.1), rgba(108, 99, 255, 0.05));
+  border: 1px solid var(--accent-primary);
+}
+
+.user-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-primary);
+  font-weight: bold;
+  margin-right: 12px;
+  font-size: 16px;
+  box-shadow: var(--shadow);
+}
+
+.user-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.user-name {
+  font-size: 14px;
+  color: var(--text-primary);
+  font-weight: 500;
+  margin-bottom: 2px;
+}
+
+.user-status {
+  font-size: 11px;
+  color: var(--success-color);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.user-status::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--success-color);
+  display: inline-block;
+}
+
+.no-users {
+  text-align: center;
+  color: var(--text-secondary);
+  font-style: italic;
+  padding: 30px 20px;
+  background: var(--bg-secondary);
+  border-radius: 8px;
+  border: 1px dashed var(--border-color);
+}
+
+/* Исправленные уведомления для темной темы */
+.user-join-notification {
+  background: rgba(0, 184, 148, 0.1);
+  color: var(--success-color);
+  border: 1px solid rgba(0, 184, 148, 0.3);
+}
+
+.user-leave-notification {
+  background: rgba(255, 107, 107, 0.1);
+  color: var(--error-color);
+  border: 1px solid rgba(255, 107, 107, 0.3);
+}
+
+/* Исправленный основной чат */
+.chat-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.chat-container {
+  background: var(--bg-secondary);
+  border-radius: 10px;
+  padding: 20px;
+  box-shadow: var(--shadow);
+  margin-bottom: 20px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border-color);
+}
+
+.message-form-container {
+  background: var(--bg-secondary);
+  padding: 20px;
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+  border: 1px solid var(--border-color);
+}
+
+/* Исправленная кнопка очистки истории */
+#clear-history {
+  background: rgba(255, 107, 107, 0.1);
+  color: var(--error-color);
+  border: 1px solid rgba(255, 107, 107, 0.3);
+  padding: 10px 20px;
+  border-radius: 25px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.3s ease;
+}
+
+#clear-history:hover {
+  background: rgba(255, 107, 107, 0.2);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(255, 107, 107, 0.3);
+}
+
+/* Исправленная форма ввода */
+#chat-message-input {
+  flex: 1;
+  padding: 12px 16px;
+  border: 1px solid var(--border-color);
+  border-radius: 25px;
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.3s ease;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+#chat-message-input:focus {
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 2px rgba(108, 99, 255, 0.25);
+}
+
+#chat-message-submit {
+  background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+  color: var(--text-primary);
+  border: none;
+  padding: 12px 24px;
+  border-radius: 25px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  transition: all 0.3s ease;
+}
+
+#chat-message-submit:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(108, 99, 255, 0.3);
+}

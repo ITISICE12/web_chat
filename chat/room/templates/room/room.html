@@ -1,16 +1,9 @@
-{% extends 'core/base.html' %} {% load static %} {% block title %}
-{{ room.name}} | {% endblock %} {% block extra_css %}
+{% extends 'core/base.html' %} {% load static %} {% block title %} 
+{{room.name}} | {% endblock %} {% block extra_css %}
 <link rel="stylesheet" href="{% static 'core/css/chat.css' %}" />
 {% endblock %} {% block content %}
 <div class="header">
   <h1>{{ room.name }}</h1>
-</div>
-
-<!-- Кнопка очистки истории -->
-<div class="history-controls">
-  <button id="clear-history" title="Очистить историю сообщений">
-    🗑️ Очистить историю
-  </button>
 </div>
 
 <div class="chat-layout">
@@ -72,10 +65,13 @@
       // Получаем данные из Django
       const roomNameElement = document.getElementById("json-roomname");
       const userNameElement = document.getElementById("json-username");
-      
+
       if (!roomNameElement || !userNameElement) {
         console.error("❌ Не найдены необходимые элементы DOM");
-        showNotification("Ошибка загрузки чата. Перезагрузите страницу.", "error");
+        showNotification(
+          "Ошибка загрузки чата. Перезагрузите страницу.",
+          "error"
+        );
         return;
       }
 
@@ -84,7 +80,10 @@
 
       if (!roomName || !userName) {
         console.error("❌ Не удалось получить roomName или userName");
-        showNotification("Ошибка: неверные данные пользователя или комнаты", "error");
+        showNotification(
+          "Ошибка: неверные данные пользователя или комнаты",
+          "error"
+        );
         return;
       }
 
@@ -97,15 +96,17 @@
 
       // Сначала загружаем сообщения из Django, потом создаем WebSocket
       loadInitialMessages();
-      
+
       // Создаем WebSocket соединение с небольшой задержкой
       setTimeout(createWebSocket, 500);
-      
-      setupUIHandlers();
 
+      setupUIHandlers();
     } catch (error) {
       console.error("❌ Ошибка инициализации чата:", error);
-      showNotification("Ошибка инициализации чата. Перезагрузите страницу.", "error");
+      showNotification(
+        "Ошибка инициализации чата. Перезагрузите страницу.",
+        "error"
+      );
     }
   }
 
@@ -114,7 +115,7 @@
     try {
       const djangoMessagesElement = document.getElementById("django-messages");
       const chatMessages = document.querySelector("#chat-messages");
-      
+
       if (!chatMessages) {
         console.error("❌ Элемент chat-messages не найден");
         return;
@@ -129,10 +130,12 @@
 
         // Отображаем сообщения из Django
         djangoMessages.forEach((djangoMsg) => {
-          const messageKey = `${djangoMsg.user?.username || 'unknown'}_${djangoMsg.content}_${djangoMsg.timestamp || new Date().toISOString()}`;
+          const messageKey = `${djangoMsg.user?.username || "unknown"}_${
+            djangoMsg.content
+          }_${djangoMsg.timestamp || new Date().toISOString()}`;
           if (!messageHistory.has(messageKey)) {
             displayMessage(
-              djangoMsg.user?.username || 'Неизвестный',
+              djangoMsg.user?.username || "Неизвестный",
               djangoMsg.content,
               djangoMsg.timestamp
             );
@@ -156,15 +159,19 @@
         chatSocket.close();
       }
 
-      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const wsUrl = protocol + "//" + window.location.host + "/ws/" + roomName + "/";
+      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+      const wsUrl =
+        protocol + "//" + window.location.host + "/ws/" + roomName + "/";
       console.log("🔗 Подключение к:", wsUrl);
 
       chatSocket = new WebSocket(wsUrl);
       setupWebSocketHandlers();
     } catch (error) {
       console.error("❌ Ошибка создания WebSocket:", error);
-      showNotification("Ошибка подключения к чату. Попытка переподключения...", "warning");
+      showNotification(
+        "Ошибка подключения к чату. Попытка переподключения...",
+        "warning"
+      );
       setTimeout(createWebSocket, 3000);
     }
   }
@@ -219,7 +226,7 @@
   // ОБРАБОТКА ИСТОРИИ СООБЩЕНИЙ
   function handleHistoryMessage(messages) {
     console.log("📚 Получена история сообщений:", messages.length);
-    
+
     messages.forEach((messageData) => {
       const messageKey = `${messageData.username}_${messageData.message}_${messageData.date_added}`;
       if (!messageHistory.has(messageKey)) {
@@ -236,10 +243,10 @@
   // ОБРАБОТКА ЧАТ-СООБЩЕНИЙ
   function handleChatMessage(data) {
     console.log("💬 Новое сообщение от:", data.username);
-    
+
     // Создаем уникальный ключ для сообщения
     const messageKey = `${data.username}_${data.message}_${data.timestamp}`;
-    
+
     // Проверяем, не отображали ли мы уже это сообщение
     if (!messageHistory.has(messageKey)) {
       displayMessage(data.username, data.message, data.timestamp);
@@ -249,12 +256,12 @@
 
   // Остальные функции без изменений...
   function handleUserActivity(data) {
-    if (data.activity === 'joined') {
+    if (data.activity === "joined") {
       handleUserJoin(data.username);
-    } else if (data.activity === 'left') {
+    } else if (data.activity === "left") {
       handleUserLeave(data.username);
     }
-    
+
     showChatNotification(data.message, data.activity);
   }
 
@@ -301,7 +308,9 @@
 
     sortedUsers.forEach((user) => {
       const userItem = document.createElement("div");
-      userItem.className = `user-item ${user === userName ? "current-user" : ""}`;
+      userItem.className = `user-item ${
+        user === userName ? "current-user" : ""
+      }`;
       const avatarText = user.substring(0, 2).toUpperCase();
 
       userItem.innerHTML = `
@@ -320,7 +329,8 @@
     const chatMessages = document.querySelector("#chat-messages");
     if (!chatMessages) return;
 
-    const notificationClass = type === "joined" ? "user-join-notification" : "user-leave-notification";
+    const notificationClass =
+      type === "joined" ? "user-join-notification" : "user-leave-notification";
     const notificationHTML = `<div class="${notificationClass}">${message}</div>`;
 
     chatMessages.innerHTML += notificationHTML;
@@ -332,8 +342,12 @@
     if (!chatMessages) return;
 
     const isCurrentUser = username === userName;
-    const messageClass = isCurrentUser ? "message-current-user" : "message-other-user";
-    const displayTime = timestamp ? new Date(timestamp).toLocaleTimeString() : new Date().toLocaleTimeString();
+    const messageClass = isCurrentUser
+      ? "message-current-user"
+      : "message-other-user";
+    const displayTime = timestamp
+      ? new Date(timestamp).toLocaleTimeString()
+      : new Date().toLocaleTimeString();
 
     const messageHTML = `
       <div class="message ${messageClass}">
@@ -350,7 +364,6 @@
   function setupUIHandlers() {
     const submitButton = document.querySelector("#chat-message-submit");
     const messageInput = document.querySelector("#chat-message-input");
-    const clearHistoryButton = document.querySelector("#clear-history");
     const messageForm = document.querySelector("#message-form");
 
     if (!submitButton || !messageInput) {
@@ -376,25 +389,27 @@
         sendMessage();
       }
     });
-
-    if (clearHistoryButton) {
-      clearHistoryButton.addEventListener("click", function (e) {
-        e.preventDefault();
-        clearMessageHistory();
-      });
-    }
   }
 
   function sendMessage() {
     if (!chatSocket) {
       console.error("❌ WebSocket не инициализирован");
-      showNotification("Соединение не установлено. Попробуйте перезагрузить страницу.", "error");
+      showNotification(
+        "Соединение не установлено. Попробуйте перезагрузить страницу.",
+        "error"
+      );
       return;
     }
 
     if (chatSocket.readyState !== WebSocket.OPEN) {
-      console.error("❌ WebSocket не готов к отправке. Состояние:", chatSocket.readyState);
-      showNotification("Соединение разорвано. Попытка переподключения...", "warning");
+      console.error(
+        "❌ WebSocket не готов к отправке. Состояние:",
+        chatSocket.readyState
+      );
+      showNotification(
+        "Соединение разорвано. Попытка переподключения...",
+        "warning"
+      );
       setTimeout(createWebSocket, 1000);
       return;
     }
@@ -417,7 +432,7 @@
       const messageData = {
         message: message,
         username: userName,
-        room: roomName
+        room: roomName,
       };
 
       console.log("📤 Отправка сообщения:", messageData);
@@ -425,24 +440,16 @@
 
       messageInput.value = "";
       console.log("✅ Сообщение отправлено успешно");
-
     } catch (error) {
       console.error("❌ Ошибка отправки сообщения:", error);
       showNotification("Ошибка отправки сообщения", "error");
     }
   }
 
-  function clearMessageHistory() {
-    if (confirm("Вы уверены, что хотите очистить историю сообщений?\nЭто действие нельзя отменить.")) {
-      const chatMessages = document.querySelector("#chat-messages");
-      if (chatMessages) {
-        chatMessages.innerHTML = '<div class="history-cleared">История сообщений очищена</div>';
-        messageHistory.clear();
-      }
-
-      showNotification("История сообщений очищена", "success");
-      console.log("🗑️ Локальная история сообщений очищена");
-    }
+  // Функция для получения CSRF токена
+  function getCSRFToken() {
+    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]');
+    return csrfToken ? csrfToken.value : '';
   }
 
   function showNotification(message, type = "info") {
@@ -450,7 +457,15 @@
     notification.className = `notification notification-${type}`;
     notification.innerHTML = `
       <div class="notification-content">
-        <span class="notification-icon">${type === "success" ? "✅" : type === "error" ? "❌" : type === "warning" ? "⚠️" : "ℹ️"}</span>
+        <span class="notification-icon">${
+          type === "success"
+            ? "✅"
+            : type === "error"
+            ? "❌"
+            : type === "warning"
+            ? "⚠️"
+            : "ℹ️"
+        }</span>
         <span>${message}</span>
       </div>
     `;

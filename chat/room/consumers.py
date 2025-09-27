@@ -105,7 +105,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
                 }))
                 return
 
-            # Сохраняем сообщение
+            # Сохраняем сообщение в БД
             saved_message = await self.save_message(username, self.room_slug, message)
 
             if saved_message:
@@ -121,7 +121,6 @@ class ChatConsumer(AsyncWebsocketConsumer):
                         'username': username,
                         'message_id': saved_message.id,
                         'timestamp': saved_message.date_added.isoformat() if saved_message.date_added else timezone.now().isoformat(),
-                        'is_buffered': False  # Добавляем поле is_buffered
                     }
                 )
             else:
@@ -143,10 +142,10 @@ class ChatConsumer(AsyncWebsocketConsumer):
             'timestamp': message_obj.date_added.isoformat() if message_obj.date_added else timezone.now().isoformat()
         }
         
-        # Ограничиваем размер буфера (последние 20 сообщений)
+        # Ограничиваем размер буфера (последние 50 сообщений)
         self.message_buffer[self.room_slug].append(message_data)
-        if len(self.message_buffer[self.room_slug]) > 20:
-            self.message_buffer[self.room_slug] = self.message_buffer[self.room_slug][-20:]
+        if len(self.message_buffer[self.room_slug]) > 50:
+            self.message_buffer[self.room_slug] = self.message_buffer[self.room_slug][-50:]
         
         print(f"💾 Сообщение {message_obj.id} добавлено в буфер комнаты {self.room_slug}")
 
@@ -161,7 +160,6 @@ class ChatConsumer(AsyncWebsocketConsumer):
             'username': event['username'],
             'message_id': event.get('message_id'),
             'timestamp': event.get('timestamp'),
-            'is_buffered': event.get('is_buffered', False)  # Добавляем поле is_buffered
         }))
 
     async def user_joined(self, event):
@@ -262,6 +260,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
 
     @sync_to_async
     def get_room_messages(self, room_slug, limit=50):
+        """Получает сообщения из БД"""
         try:
             room = Room.objects.get(slug=room_slug)
             messages = Message.objects.filter(room=room).select_related('user').order_by('date_added')[:limit]
@@ -279,9 +278,49 @@ class ChatConsumer(AsyncWebsocketConsumer):
             print(f"❌ Ошибка загрузки истории: {e}")
             return []
 
+    async def get_combined_messages(self, room_slug, limit=50):
+        """Получает сообщения из БД и объединяет с буфером"""
+        try:
+            # Получаем сообщения из БД
+            db_messages = await self.get_room_messages(room_slug, limit)
+            
+            # Получаем сообщения из буфера
+            buffer_messages = self.message_buffer.get(room_slug, [])
+            
+            # Объединяем сообщения, убирая дубликаты по ID
+            combined_messages = []
+            seen_ids = set()
+            
+            # Сначала добавляем сообщения из буфера (более новые)
+            for msg in reversed(buffer_messages):
+                if msg['id'] not in seen_ids:
+                    combined_messages.append({
+                        'id': msg['id'],
+                        'message': msg['message'],
+                        'username': msg['username'],
+                        'date_added': msg['timestamp']
+                    })
+                    seen_ids.add(msg['id'])
+            
+            # Затем добавляем сообщения из БД (более старые)
+            for msg in db_messages:
+                if msg['id'] not in seen_ids:
+                    combined_messages.append(msg)
+                    seen_ids.add(msg['id'])
+            
+            # Сортируем по времени (самые старые первыми)
+            combined_messages.sort(key=lambda x: x['date_added'] if x['date_added'] else '')
+            
+            # Ограничиваем лимитом
+            return combined_messages[-limit:]
+            
+        except Exception as e:
+            print(f"❌ Ошибка объединения сообщений: {e}")
+            return await self.get_room_messages(room_slug, limit)
+
     async def send_history(self):
-        """Отправляет историю сообщений только текущему пользователю"""
-        messages = await self.get_room_messages(self.room_slug)
+        """Отправляет полную историю сообщений (из БД + буфера) только текущему пользователю"""
+        messages = await self.get_combined_messages(self.room_slug)
         await self.send(text_data=json.dumps({
             'type': 'history',
             'messages': messages

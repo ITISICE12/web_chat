@@ -1,0 +1,4 @@
+.idea
+.venv
+/chat/todo
+/chat/db.sqlite3

@@ -41,7 +41,32 @@
     </div>
   </div>
 </div>
-{% endblock %} {% block scripts %} {{ room.slug|json_script:"json-roomname" }}
+
+<!-- Модальное окно для личных сообщений -->
+<div id="private-message-modal" class="modal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3>Личное сообщение</h3>
+      <span class="close">&times;</span>
+    </div>
+    <div class="modal-body">
+      <p>Кому: <span id="private-message-to"></span></p>
+      <textarea 
+        id="private-message-input" 
+        placeholder="Введите ваше сообщение..." 
+        rows="4"
+      ></textarea>
+    </div>
+    <div class="modal-footer">
+      <button id="send-private-message" class="btn-primary">Отправить</button>
+      <button id="cancel-private-message" class="btn-secondary">Отмена</button>
+    </div>
+  </div>
+</div>
+{% endblock %} 
+
+{% block scripts %} 
+{{ room.slug|json_script:"json-roomname" }}
 {{ request.user.username|json_script:"json-username" }}
 <!-- Передаем сообщения из Django в JavaScript -->
 <script id="django-messages" type="application/json">
@@ -53,6 +78,8 @@
   let roomName, userName;
   let messageHistory = new Set();
   let onlineUsers = new Set();
+  let privateMessageModal = null;
+  let currentPrivateRecipient = null;
 
   // Ждем загрузки DOM
   document.addEventListener("DOMContentLoaded", function () {
@@ -68,10 +95,7 @@
 
       if (!roomNameElement || !userNameElement) {
         console.error("❌ Не найдены необходимые элементы DOM");
-        showNotification(
-          "Ошибка загрузки чата. Перезагрузите страницу.",
-          "error"
-        );
+        showNotification("Ошибка загрузки чата. Перезагрузите страницу.", "error");
         return;
       }
 
@@ -80,10 +104,7 @@
 
       if (!roomName || !userName) {
         console.error("❌ Не удалось получить roomName или userName");
-        showNotification(
-          "Ошибка: неверные данные пользователя или комнаты",
-          "error"
-        );
+        showNotification("Ошибка: неверные данные пользователя или комнаты", "error");
         return;
       }
 
@@ -94,6 +115,12 @@
       onlineUsers.add(userName);
       updateOnlineUsersDisplay();
 
+      // Инициализируем личные сообщения
+      initializePrivateMessages();
+      
+      // Запрашиваем разрешение на уведомления
+      requestNotificationPermission();
+
       // Сначала загружаем сообщения из Django, потом создаем WebSocket
       loadInitialMessages();
 
@@ -103,10 +130,98 @@
       setupUIHandlers();
     } catch (error) {
       console.error("❌ Ошибка инициализации чата:", error);
-      showNotification(
-        "Ошибка инициализации чата. Перезагрузите страницу.",
-        "error"
-      );
+      showNotification("Ошибка инициализации чата. Перезагрузите страницу.", "error");
+    }
+  }
+
+  function initializePrivateMessages() {
+    // Создаем модальное окно
+    createPrivateMessageModal();
+    
+    // Добавляем обработчики для списка пользователей
+    setupPrivateMessageHandlers();
+  }
+
+  function createPrivateMessageModal() {
+    privateMessageModal = document.getElementById('private-message-modal');
+    
+    if (!privateMessageModal) {
+      console.error("❌ Модальное окно не найдено в DOM");
+      return;
+    }
+
+    // Обработчики модального окна
+    privateMessageModal.querySelector('.close').addEventListener('click', closePrivateMessageModal);
+    privateMessageModal.querySelector('#cancel-private-message').addEventListener('click', closePrivateMessageModal);
+    privateMessageModal.querySelector('#send-private-message').addEventListener('click', sendPrivateMessage);
+    
+    // Закрытие по клику вне окна
+    privateMessageModal.addEventListener('click', function(e) {
+      if (e.target === privateMessageModal) {
+        closePrivateMessageModal();
+      }
+    });
+  }
+
+  function setupPrivateMessageHandlers() {
+    // Делегирование событий для списка пользователей
+    document.addEventListener('click', function(e) {
+      const userItem = e.target.closest('.user-item');
+      if (userItem && !userItem.classList.contains('current-user')) {
+        const userName = userItem.querySelector('.user-name').textContent;
+        openPrivateMessageModal(userName);
+      }
+    });
+  }
+
+  function openPrivateMessageModal(userName) {
+    currentPrivateRecipient = userName;
+    document.getElementById('private-message-to').textContent = userName;
+    privateMessageModal.style.display = 'block';
+    document.getElementById('private-message-input').focus();
+  }
+
+  function closePrivateMessageModal() {
+    privateMessageModal.style.display = 'none';
+    currentPrivateRecipient = null;
+    document.getElementById('private-message-input').value = '';
+  }
+
+  function sendPrivateMessage() {
+    const messageInput = document.getElementById('private-message-input');
+    const message = messageInput.value.trim();
+
+    if (!message) {
+      showNotification('Введите сообщение', 'warning');
+      return;
+    }
+
+    if (!currentPrivateRecipient) {
+      showNotification('Получатель не выбран', 'error');
+      return;
+    }
+
+    if (!chatSocket || chatSocket.readyState !== WebSocket.OPEN) {
+      showNotification('Соединение не установлено', 'error');
+      return;
+    }
+
+    try {
+      const messageData = {
+        type: 'private_message',
+        message: message,
+        to_username: currentPrivateRecipient,
+        username: userName
+      };
+
+      console.log('📤 Отправка личного сообщения:', messageData);
+      chatSocket.send(JSON.stringify(messageData));
+
+      closePrivateMessageModal();
+      showNotification('Личное сообщение отправлено', 'success');
+    } catch (error) {
+      console.error('❌ Ошибка отправки личного сообщения:', error);
+      showNotification('Ошибка отправки сообщения', 'error');
     }
   }
 
@@ -160,18 +275,14 @@
       }
 
       const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-      const wsUrl =
-        protocol + "//" + window.location.host + "/ws/" + roomName + "/";
+      const wsUrl = protocol + "//" + window.location.host + "/ws/" + roomName + "/";
       console.log("🔗 Подключение к:", wsUrl);
 
       chatSocket = new WebSocket(wsUrl);
       setupWebSocketHandlers();
     } catch (error) {
       console.error("❌ Ошибка создания WebSocket:", error);
-      showNotification(
-        "Ошибка подключения к чату. Попытка переподключения...",
-        "warning"
-      );
+      showNotification("Ошибка подключения к чату. Попытка переподключения...", "warning");
       setTimeout(createWebSocket, 3000);
     }
   }
@@ -205,6 +316,12 @@
           handleUserActivity(data);
         } else if (data.type === "online_users") {
           handleOnlineUsers(data);
+        } else if (data.type === "private_message") {
+          handlePrivateMessage(data);
+        } else if (data.type === "private_history") {
+          handlePrivateHistory(data);
+        } else if (data.type === "private_message_sent") {
+          handlePrivateMessageSent(data);
         } else if (data.type === "error") {
           console.error("❌ Ошибка от сервера:", data.message);
           showNotification(data.message, "error");
@@ -254,7 +371,104 @@
     }
   }
 
-  // Остальные функции без изменений...
+  // ОБРАБОТКА ЛИЧНЫХ СООБЩЕНИЙ
+  function handlePrivateMessage(data) {
+    console.log('💌 Личное сообщение от:', data.from_username);
+    
+    // Создаем уведомление
+    showPrivateMessageNotification(data.from_username, data.message);
+    
+    // Добавляем в историю чата с пометкой [ЛС]
+    displayPrivateMessage(data.from_username, data.message, data.timestamp);
+  }
+
+  function handlePrivateHistory(data) {
+    console.log('📚 Загружена история личных сообщений:', data.messages.length);
+    
+    data.messages.forEach(msg => {
+      if (msg.direction === 'received') {
+        displayPrivateMessage(msg.from_username, msg.message, msg.timestamp);
+      }
+    });
+  }
+
+  function handlePrivateMessageSent(data) {
+    console.log('✅ Личное сообщение отправлено:', data.to_username);
+    displayPrivateMessageSent(data.to_username, data.message, data.timestamp);
+  }
+
+  function showPrivateMessageNotification(fromUser, message) {
+    // Проверяем поддержку уведомлений
+    if ("Notification" in window && Notification.permission === "granted") {
+      new Notification(`Личное сообщение от ${fromUser}`, {
+        body: message,
+        icon: '/static/core/images/icon.png'
+      });
+    }
+    
+    // Показываем уведомление в интерфейсе
+    const notification = document.createElement('div');
+    notification.className = 'notification notification-private';
+    notification.innerHTML = `
+      <div class="notification-content">
+        <span class="notification-icon">💌</span>
+        <div>
+          <strong>Личное сообщение от ${fromUser}</strong>
+          <p>${message}</p>
+        </div>
+      </div>
+    `;
+    
+    document.body.appendChild(notification);
+    
+    setTimeout(() => {
+      if (notification.parentNode) {
+        notification.parentNode.removeChild(notification);
+      }
+    }, 5000);
+  }
+
+  function displayPrivateMessage(fromUser, message, timestamp) {
+    const chatMessages = document.querySelector("#chat-messages");
+    if (!chatMessages) return;
+
+    const displayTime = timestamp ? 
+      new Date(timestamp).toLocaleTimeString() : 
+      new Date().toLocaleTimeString();
+
+    const messageHTML = `
+      <div class="message private-message">
+        <p class="message-username">💌 ${fromUser} [ЛС]</p>
+        <p class="message-content">${message}</p>
+        <p class="message-time">${displayTime}</p>
+      </div>
+    `;
+
+    chatMessages.innerHTML += messageHTML;
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+  }
+
+  function displayPrivateMessageSent(toUser, message, timestamp) {
+    const chatMessages = document.querySelector("#chat-messages");
+    if (!chatMessages) return;
+
+    const displayTime = timestamp ? 
+      new Date(timestamp).toLocaleTimeString() : 
+      new Date().toLocaleTimeString();
+
+    const messageHTML = `
+      <div class="message private-message-sent">
+        <p class="message-username">💌 Вы -> ${toUser} [ЛС]</p>
+        <p class="message-content">${message}</p>
+        <p class="message-time">${displayTime}</p>
+      </div>
+    `;
+
+    chatMessages.innerHTML += messageHTML;
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+  }
+
+  // Обработчики пользователей
   function handleUserActivity(data) {
     if (data.activity === "joined") {
       handleUserJoin(data.username);
@@ -308,9 +522,7 @@
 
     sortedUsers.forEach((user) => {
       const userItem = document.createElement("div");
-      userItem.className = `user-item ${
-        user === userName ? "current-user" : ""
-      }`;
+      userItem.className = `user-item ${user === userName ? "current-user" : ""}`;
       const avatarText = user.substring(0, 2).toUpperCase();
 
       userItem.innerHTML = `
@@ -329,8 +541,7 @@
     const chatMessages = document.querySelector("#chat-messages");
     if (!chatMessages) return;
 
-    const notificationClass =
-      type === "joined" ? "user-join-notification" : "user-leave-notification";
+    const notificationClass = type === "joined" ? "user-join-notification" : "user-leave-notification";
     const notificationHTML = `<div class="${notificationClass}">${message}</div>`;
 
     chatMessages.innerHTML += notificationHTML;
@@ -342,12 +553,8 @@
     if (!chatMessages) return;
 
     const isCurrentUser = username === userName;
-    const messageClass = isCurrentUser
-      ? "message-current-user"
-      : "message-other-user";
-    const displayTime = timestamp
-      ? new Date(timestamp).toLocaleTimeString()
-      : new Date().toLocaleTimeString();
+    const messageClass = isCurrentUser ? "message-current-user" : "message-other-user";
+    const displayTime = timestamp ? new Date(timestamp).toLocaleTimeString() : new Date().toLocaleTimeString();
 
     const messageHTML = `
       <div class="message ${messageClass}">
@@ -394,22 +601,13 @@
   function sendMessage() {
     if (!chatSocket) {
       console.error("❌ WebSocket не инициализирован");
-      showNotification(
-        "Соединение не установлено. Попробуйте перезагрузить страницу.",
-        "error"
-      );
+      showNotification("Соединение не установлено. Попробуйте перезагрузить страницу.", "error");
       return;
     }
 
     if (chatSocket.readyState !== WebSocket.OPEN) {
-      console.error(
-        "❌ WebSocket не готов к отправке. Состояние:",
-        chatSocket.readyState
-      );
-      showNotification(
-        "Соединение разорвано. Попытка переподключения...",
-        "warning"
-      );
+      console.error("❌ WebSocket не готов к отправке. Состояние:", chatSocket.readyState);
+      showNotification("Соединение разорвано. Попытка переподключения...", "warning");
       setTimeout(createWebSocket, 1000);
       return;
     }
@@ -446,10 +644,11 @@
     }
   }
 
-  // Функция для получения CSRF токена
-  function getCSRFToken() {
-    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]');
-    return csrfToken ? csrfToken.value : '';
+  // Запрашиваем разрешение на уведомления
+  function requestNotificationPermission() {
+    if ("Notification" in window && Notification.permission === "default") {
+      Notification.requestPermission();
+    }
   }
 
   function showNotification(message, type = "info") {
@@ -458,13 +657,9 @@
     notification.innerHTML = `
       <div class="notification-content">
         <span class="notification-icon">${
-          type === "success"
-            ? "✅"
-            : type === "error"
-            ? "❌"
-            : type === "warning"
-            ? "⚠️"
-            : "ℹ️"
+          type === "success" ? "✅" :
+          type === "error" ? "❌" :
+          type === "warning" ? "⚠️" : "ℹ️"
         }</span>
         <span>${message}</span>
       </div>

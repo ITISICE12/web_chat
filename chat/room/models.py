@@ -1,6 +1,5 @@
-from django.contrib.auth.models import User
 from django.db import models
-
+from django.contrib.auth.models import User
 
 class Room(models.Model):
     name = models.CharField(max_length=255)
@@ -11,6 +10,16 @@ class Message(models.Model):
     user = models.ForeignKey(User, related_name='messages', on_delete=models.CASCADE)
     content = models.TextField()
     date_added = models.DateTimeField(auto_now_add=True)
+
     class Meta:
         ordering = ('date_added',)
-    
+
+class PrivateMessage(models.Model):
+    from_user = models.ForeignKey(User, related_name='sent_messages', on_delete=models.CASCADE)
+    to_user = models.ForeignKey(User, related_name='received_messages', on_delete=models.CASCADE)
+    content = models.TextField()
+    timestamp = models.DateTimeField(auto_now_add=True)
+    is_read = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ('timestamp',)

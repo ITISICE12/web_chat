@@ -1,4 +1,39 @@
-.idea
-.venv
-/chat/todo
-/chat/db.sqlite3
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Virtual environment
+.venv/
+venv/
+env/
+
+# Database
+*.sqlite3
+*.db
+db.sqlite3
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Environment variables
+.env
+.env.local
+
+# Django
+mediafiles/
+staticfiles/
+local_settings.py
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/

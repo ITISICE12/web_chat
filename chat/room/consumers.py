@@ -177,12 +177,15 @@ class ChatConsumer(AsyncWebsocketConsumer):
         saved_message = await self.save_private_message(from_username, to_username, message)
 
         if saved_message:
+            # Используем текущее время, если timestamp недоступен
+            timestamp = getattr(saved_message, 'timestamp', timezone.now())
+            
             # Отправляем сообщение отправителю
             await self.send(text_data=json.dumps({
                 'type': 'private_message_sent',
                 'message': message,
                 'to_username': to_username,
-                'timestamp': saved_message.timestamp.isoformat(),
+                'timestamp': timestamp.isoformat(),
                 'message_id': saved_message.id
             }))
 
@@ -194,7 +197,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
                         'type': 'private_message',
                         'message': message,
                         'from_username': from_username,
-                        'timestamp': saved_message.timestamp.isoformat(),
+                        'timestamp': timestamp.isoformat(),
                         'message_id': saved_message.id
                     }
                 )
@@ -322,14 +325,19 @@ class ChatConsumer(AsyncWebsocketConsumer):
     def get_private_messages(self, username, limit=50):
         """Получает историю личных сообщений пользователя"""
         try:
-            user = get_user_model().objects.get(username=username)
+            User = get_user_model()
+            user = User.objects.get(username=username)
+            
             # Получаем сообщения где пользователь отправитель или получатель
             sent_messages = PrivateMessage.objects.filter(from_user=user)
             received_messages = PrivateMessage.objects.filter(to_user=user)
             
             # Объединяем и сортируем
-            all_messages = list(sent_messages) + list(received_messages)
-            all_messages.sort(key=lambda x: x.timestamp)
+            from itertools import chain
+            all_messages = sorted(
+                chain(sent_messages, received_messages),
+                key=lambda x: x.timestamp
+            )
             
             messages_list = []
             for msg in all_messages[-limit:]:
@@ -342,6 +350,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
                     'direction': 'sent' if msg.from_user == user else 'received'
                 })
             return messages_list
+        
         except Exception as e:
             print(f"❌ Ошибка загрузки личной истории: {e}")
             return []
@@ -355,7 +364,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
         }))
         print(f"📚 Отправлено {len(messages)} личных сообщений для {self.user.username}")
 
-    # СУЩЕСТВУЮЩИЕ МЕТОДЫ (без изменений)
+    # СУЩЕСТВУЮЩИЕ МЕТОДЫ
 
     async def add_message_to_buffer(self, message_obj):
         """Добавляет сообщение в буфер для всех пользователей комнаты"""
